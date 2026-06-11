@@ -20,7 +20,7 @@ class MemoryItem:
 
 
 class MemoryStore:
-    """SQLite-backed durable memory for conversations, knowledge, tasks, files and reports."""
+    """SQLite-backed durable memory split into episodic, semantic and learning records."""
 
     def __init__(self, path: str | Path):
         self.path = Path(path)
@@ -75,6 +75,25 @@ class MemoryStore:
                 (kind, title.strip() or kind, content, metadata_json, time()),
             )
             return int(cur.lastrowid)
+
+
+    def add_episodic(self, title: str, content: str, metadata: dict[str, Any] | None = None) -> int:
+        """Store user-dialog episodes separately from semantic facts."""
+        data = {"memory_type": "episodic"} | (metadata or {})
+        return self.add("dialog", title, content, data)
+
+    def add_semantic(self, title: str, content: str, metadata: dict[str, Any] | None = None) -> int:
+        """Store facts and durable knowledge."""
+        data = {"memory_type": "semantic"} | (metadata or {})
+        return self.add("knowledge", title, content, data)
+
+    def add_learning(self, title: str, content: str, metadata: dict[str, Any] | None = None) -> int:
+        """Store training and evaluation outcomes."""
+        data = {"memory_type": "learning"} | (metadata or {})
+        return self.add("learning", title, content, data)
+
+    def by_memory_type(self, memory_type: str, limit: int = 20) -> list[MemoryItem]:
+        return [item for item in self.recent(limit * 3) if item.metadata.get("memory_type") == memory_type][:limit]
 
     def recent(self, limit: int = 20, kind: str | None = None) -> list[MemoryItem]:
         sql = "SELECT * FROM memory"

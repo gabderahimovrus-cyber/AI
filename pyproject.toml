@@ -10,3 +10,11 @@ autonomous-ai-assistant = "autonomous_ai_assistant.gui:main"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+
+[project.optional-dependencies]
+training = [
+  "torch",
+  "sentencepiece",
+  "pypdf",
+  "faiss-cpu",
+]
