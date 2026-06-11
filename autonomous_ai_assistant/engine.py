@@ -8,6 +8,7 @@ from threading import Event, Thread
 from typing import Callable
 
 from .files import WorkspaceFiles
+from .language_model import ChatContext, LanguageModelRouter
 from .logger import ActionLogger
 from .memory import MemoryStore
 from .web_learning import WebLearner
@@ -35,18 +36,27 @@ class AssistantEngine:
         self.autonomous_thread: Thread | None = None
 
     def _load_settings(self) -> dict[str, str]:
+        defaults = {"resource_level": "средняя нагрузка", "language": "ru", "llm_backend": "auto", "llm_model": ""}
         if self.settings_path.exists():
-            return json.loads(self.settings_path.read_text(encoding="utf-8"))
-        return {"resource_level": "средняя нагрузка", "language": "ru"}
+            loaded = json.loads(self.settings_path.read_text(encoding="utf-8"))
+            return defaults | loaded
+        return defaults
 
     def save_settings(self) -> None:
         self.settings_path.parent.mkdir(parents=True, exist_ok=True)
+        defaults = {"resource_level": "средняя нагрузка", "language": "ru", "llm_backend": "auto", "llm_model": ""}
+        for key, value in defaults.items():
+            self.settings.setdefault(key, value)
         self.settings_path.write_text(json.dumps(self.settings, ensure_ascii=False, indent=2), encoding="utf-8")
         self.logger.log(f"Настройки сохранены: {self.settings}")
 
     def chat(self, message: str) -> str:
         message = message.strip()
-        self.memory.add("dialog", "Пользователь", message, {"role": "user"})
+        user_metadata = {"role": "user"}
+        extracted_name = self._extract_user_name(message)
+        if extracted_name:
+            user_metadata["user_name"] = extracted_name
+        self.memory.add("dialog", "Пользователь", message, user_metadata)
         self.logger.log(f"Получено сообщение пользователя: {message[:120]}")
         lower = message.lower()
         if self._is_learning_request(lower):
@@ -128,26 +138,12 @@ class AssistantEngine:
         return "\n".join(report)
 
     def _answer_from_memory(self, message: str) -> str:
-        memories = self.memory.search(message, limit=5)
-        if memories:
-            context = "\n".join(f"- [{m.kind}] {m.title}: {m.content[:500]}" for m in memories)
-            return (
-                "Я учел сохраненную память и контекст разговора.\n\n"
-                f"Релевантные воспоминания:\n{context}\n\n"
-                "Ответ: " + self._compose_reasoned_answer(message, memories)
-            )
-        return self._compose_reasoned_answer(message, [])
-
-    def _compose_reasoned_answer(self, message: str, memories: list) -> str:
-        lower = message.lower()
-        if "квант" in lower:
-            return "Квантовая физика описывает микромир, где энергия и состояние систем меняются дискретными порциями, частицы проявляют волновые свойства, а результат измерения вероятностен. Для изучения начните с суперпозиции, интерференции, неопределенности Гейзенберга и квантовых состояний."
-        if "план" in lower or "изуч" in lower:
-            return "Предлагаю план: 1) определить цель, 2) изучить базовые понятия, 3) сделать маленький проект, 4) разобрать ошибки, 5) сохранить конспект, 6) повторить и усложнить задачу. Я могу запустить обучение по конкретной теме и сохранить резюме."
-        if "что ты помнишь" in lower or "память" in lower:
-            stats = self.memory.stats()
-            return "В памяти сохранено: " + ", ".join(f"{k}: {v}" for k, v in stats.items())
-        return "Я могу ответить на вопрос, создать файл/код, запустить обучение по теме или автономно пополнять знания. Уточните цель, и я сохраню результат в долговременной памяти."
+        memories = self.memory.search(message, limit=6)
+        history = list(reversed(self.memory.recent(10, "dialog")))
+        context = ChatContext(message=message, memories=memories, history=history)
+        response, backend_name = LanguageModelRouter(self.settings).generate(context)
+        self.logger.log(f"Ответ сформирован языковым режимом: {backend_name}")
+        return response
 
     def _handle_file_request(self, message: str) -> str:
         match = re.search(r"(?:файл|file)\s+([\w./\\-]+\.(?:txt|md|json|csv|html|py|js|css|cpp|java))", message, re.I)
@@ -186,6 +182,10 @@ class AssistantEngine:
             "Ошибки: критических ошибок не обнаружено."
         )
         self.memory.add("analysis", "Самоанализ ответа", report, {"request": request, "response_size": len(response)})
+
+    def _extract_user_name(self, message: str) -> str | None:
+        match = re.search(r"(?:меня зовут|мо[её] имя|я)\s+([А-ЯЁA-Z][а-яёa-z]{1,24})", message)
+        return match.group(1) if match else None
 
     def _is_learning_request(self, lower: str) -> bool:
         return any(p in lower for p in ["изучи", "обуч", "learn", "исследуй"])

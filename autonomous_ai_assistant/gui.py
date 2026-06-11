@@ -151,7 +151,22 @@ class AssistantApp(tk.Tk):
         self.resource_level = ttk.Combobox(frame, values=["низкая нагрузка", "средняя нагрузка", "высокая нагрузка", "максимальная нагрузка"], state="readonly")
         self.resource_level.set(self.engine.settings.get("resource_level", "средняя нагрузка"))
         self.resource_level.grid(row=0, column=1, sticky="ew", padx=12, pady=12)
-        ttk.Button(frame, text="Сохранить настройки", command=self._save_settings).grid(row=1, column=1, sticky="e", padx=12, pady=12)
+        ttk.Label(frame, text="Языковая модель", background="#111827").grid(row=1, column=0, sticky="w", padx=12, pady=12)
+        self.llm_backend = ttk.Combobox(frame, values=["auto", "ollama", "transformers", "off"], state="readonly")
+        self.llm_backend.set(self.engine.settings.get("llm_backend", "auto"))
+        self.llm_backend.grid(row=1, column=1, sticky="ew", padx=12, pady=12)
+        ttk.Label(frame, text="Модель (например llama3.2)", background="#111827").grid(row=2, column=0, sticky="w", padx=12, pady=12)
+        self.llm_model = ttk.Entry(frame)
+        self.llm_model.insert(0, self.engine.settings.get("llm_model", ""))
+        self.llm_model.grid(row=2, column=1, sticky="ew", padx=12, pady=12)
+        ttk.Label(
+            frame,
+            text="auto пробует локальную Ollama; transformers можно выбрать явно. Если модели нет, работает встроенный живой режим.",
+            background="#111827",
+            foreground="#9ca3af",
+            wraplength=620,
+        ).grid(row=3, column=0, columnspan=2, sticky="w", padx=12, pady=(0, 12))
+        ttk.Button(frame, text="Сохранить настройки", command=self._save_settings).grid(row=4, column=1, sticky="e", padx=12, pady=12)
         frame.columnconfigure(1, weight=1)
 
     def _send_chat(self) -> None:
@@ -260,6 +275,8 @@ class AssistantApp(tk.Tk):
 
     def _save_settings(self) -> None:
         self.engine.settings["resource_level"] = self.resource_level.get()
+        self.engine.settings["llm_backend"] = self.llm_backend.get()
+        self.engine.settings["llm_model"] = self.llm_model.get().strip()
         self.engine.save_settings()
         self._refresh_memory()
 
