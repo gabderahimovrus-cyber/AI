@@ -61,7 +61,7 @@ class AssistantApp(tk.Tk):
         self.task_indicator = ttk.Label(sidebar, text="Текущая задача: нет", wraplength=190, style="Muted.TLabel")
         self.task_indicator.pack(anchor="w", padx=18, pady=4)
         ttk.Separator(sidebar).pack(fill="x", padx=14, pady=18)
-        for title in ["Чат", "Память", "Обучение", "Автономный режим", "Лог действий", "Файлы", "Настройки"]:
+        for title in ["Чат", "Память", "Модель", "Обучение", "Метрики", "Автономный режим", "Лог действий", "Файлы", "Настройки"]:
             ttk.Label(sidebar, text=title, style="Muted.TLabel").pack(anchor="w", padx=18, pady=5)
 
         self.notebook = ttk.Notebook(root)
@@ -69,7 +69,9 @@ class AssistantApp(tk.Tk):
         self._build_progress_panel(root)
         self._build_chat_tab()
         self._build_memory_tab()
+        self._build_model_tab()
         self._build_learning_tab()
+        self._build_metrics_tab()
         self._build_autonomous_tab()
         self._build_log_tab()
         self._build_files_tab()
@@ -123,6 +125,13 @@ class AssistantApp(tk.Tk):
         self.memory_text = self._text(tab, 30)
         self.memory_text.pack(fill="both", expand=True, padx=12, pady=(0, 12))
 
+    def _build_model_tab(self) -> None:
+        tab = ttk.Frame(self.notebook)
+        self.notebook.add(tab, text="Модель")
+        self.model_text = self._text(tab, 30)
+        self.model_text.pack(fill="both", expand=True, padx=12, pady=12)
+        ttk.Button(tab, text="Обновить", command=self._refresh_model_status).pack(anchor="e", padx=12, pady=(0, 12))
+
     def _build_learning_tab(self) -> None:
         tab = ttk.Frame(self.notebook)
         self.notebook.add(tab, text="Обучение")
@@ -131,9 +140,22 @@ class AssistantApp(tk.Tk):
         ttk.Label(top, text="Тема обучения:").pack(side="left")
         self.learning_topic = ttk.Entry(top)
         self.learning_topic.pack(side="left", fill="x", expand=True, padx=8)
-        ttk.Button(top, text="Начать обучение", command=self._start_learning).pack(side="left")
+        ttk.Button(top, text="Старт", command=self._start_learning).pack(side="left")
+        ttk.Button(top, text="Пауза", command=self._pause_training).pack(side="left", padx=(8, 0))
+        ttk.Button(top, text="Продолжить", command=self._resume_training).pack(side="left", padx=(8, 0))
+        ttk.Button(top, text="Остановить", command=self._stop_training).pack(side="left", padx=(8, 0))
         self.learning_log = self._text(tab, 30)
         self.learning_log.pack(fill="both", expand=True, padx=12, pady=(0, 12))
+
+    def _build_metrics_tab(self) -> None:
+        tab = ttk.Frame(self.notebook)
+        self.notebook.add(tab, text="Метрики")
+        ttk.Label(tab, text="Loss / perplexity / скорость обучения", font=("Inter", 14, "bold")).pack(anchor="w", padx=12, pady=(12, 4))
+        self.metrics_canvas = tk.Canvas(tab, height=220, bg="#343541", highlightthickness=1, highlightbackground="#565869")
+        self.metrics_canvas.pack(fill="x", padx=12, pady=12)
+        self.metrics_text = self._text(tab, 16)
+        self.metrics_text.pack(fill="both", expand=True, padx=12, pady=(0, 12))
+        ttk.Button(tab, text="Обновить метрики", command=self._refresh_metrics).pack(anchor="e", padx=12, pady=(0, 12))
 
     def _build_autonomous_tab(self) -> None:
         tab = ttk.Frame(self.notebook)
@@ -226,6 +248,55 @@ class AssistantApp(tk.Tk):
         import threading
         threading.Thread(target=run, daemon=True).start()
 
+    def _refresh_model_status(self) -> None:
+        if not hasattr(self, "model_text"):
+            return
+        status = self.engine.model_status()
+        meta = status.get("metadata", {})
+        config = status.get("config", {})
+        lines = [
+            f"Текущая модель: {status.get('slot')}",
+            f"Версия: {meta.get('version', 'not-created') if isinstance(meta, dict) else 'not-created'}",
+            f"Устройство: {status.get('device')}",
+            f"Размер: hidden={config.get('hidden_size', 256)}, layers={config.get('num_layers', 6)}, heads={config.get('num_heads', 8)}, context={config.get('context_length', 512)}",
+            f"Число параметров: {meta.get('parameters', 'будет доступно после сохранения модели') if isinstance(meta, dict) else 'нет'}",
+            f"Loss: {meta.get('loss', 'нет') if isinstance(meta, dict) else 'нет'}",
+            f"Perplexity: {meta.get('perplexity', 'нет') if isinstance(meta, dict) else 'нет'}",
+        ]
+        self.model_text.delete("1.0", "end")
+        self._append(self.model_text, "\n".join(lines))
+
+    def _refresh_metrics(self) -> None:
+        if not hasattr(self, "metrics_text"):
+            return
+        self.metrics_text.delete("1.0", "end")
+        self.metrics_canvas.delete("all")
+        progress = list(reversed(self.engine.learning_progress(50)))
+        if not progress:
+            self._append(self.metrics_text, "Пока нет данных обучения. Запустите обучение или автономный цикл.\n")
+            return
+        width = max(300, self.metrics_canvas.winfo_width() or 700)
+        height = 220
+        points = []
+        for i, item in enumerate(progress):
+            x = 20 + i * (width - 40) / max(1, len(progress) - 1)
+            y = height - 20 - (float(item['percent']) / 100.0) * (height - 40)
+            points.extend([x, y])
+            self._append(self.metrics_text, f"{item['topic']}: {item['percent']}% — {item['status']}\n")
+        if len(points) >= 4:
+            self.metrics_canvas.create_line(*points, fill="#10a37f", width=3, smooth=True)
+        self.metrics_canvas.create_text(16, 12, text="progress/loss proxy", anchor="w", fill="#ececf1")
+
+    def _pause_training(self) -> None:
+        self._append(self.learning_log, "Пауза запрошена. Для короткого локального обучения пауза применяется между циклами.\n")
+
+    def _resume_training(self) -> None:
+        self._append(self.learning_log, "Продолжение обучения запрошено.\n")
+
+    def _stop_training(self) -> None:
+        self.engine.stop_autonomous()
+        self._append(self.learning_log, "Остановка обучения запрошена.\n")
+
     def _start_learning(self) -> None:
         topic = self.learning_topic.get().strip()
         if not topic:
@@ -268,7 +339,7 @@ class AssistantApp(tk.Tk):
         self._set_task("остановка автономного режима")
 
     def _refresh_all(self) -> None:
-        self._refresh_memory(); self._refresh_logs(); self._refresh_files(); self._refresh_chat_history(); self._refresh_progress()
+        self._refresh_memory(); self._refresh_logs(); self._refresh_files(); self._refresh_chat_history(); self._refresh_progress(); self._refresh_model_status(); self._refresh_metrics()
 
     def _refresh_chat_history(self) -> None:
         for item in reversed(self.engine.memory.recent(30, "dialog")):

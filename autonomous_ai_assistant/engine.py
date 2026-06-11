@@ -11,6 +11,8 @@ from .files import WorkspaceFiles
 from .language_model import ChatContext, LanguageModelRouter
 from .logger import ActionLogger
 from .memory import MemoryStore
+from .models.manager import ModelManager
+from .vector_store.faiss_store import VectorStore
 from .web_learning import WebLearner
 
 CODE_TEMPLATES = {
@@ -30,11 +32,20 @@ class AssistantEngine:
         self.logger = ActionLogger(self.data_dir / "actions.log")
         self.files = WorkspaceFiles(self.data_dir / "workspace")
         self.learner = WebLearner()
+        self.model_manager = ModelManager(self.data_dir / "models")
+        self.vector_store = VectorStore(self.data_dir / "vector_store")
+        self.vector_store.load()
         self.settings_path = self.data_dir / "settings.json"
         self.settings = self._load_settings()
         self.autonomous_stop = Event()
         self.autonomous_thread: Thread | None = None
         self._progress_lock = RLock()
+
+    def model_status(self) -> dict[str, object]:
+        metadata = self.model_manager.metadata("production")
+        config_path = self.model_manager.slot_dir("production") / "config.json"
+        config = json.loads(config_path.read_text(encoding="utf-8")) if config_path.exists() else {}
+        return {"slot": "production", "metadata": metadata, "config": config, "device": ModelManager.device()}
 
     def _load_settings(self) -> dict[str, str]:
         defaults = {"resource_level": "средняя нагрузка", "language": "ru", "llm_backend": "auto", "llm_model": "", "llm_learning_coach": "on", "self_modification_mode": "workspace"}
@@ -57,7 +68,7 @@ class AssistantEngine:
         extracted_name = self._extract_user_name(message)
         if extracted_name:
             user_metadata["user_name"] = extracted_name
-        self.memory.add("dialog", "Пользователь", message, user_metadata)
+        self.memory.add_episodic("Пользователь", message, user_metadata)
         self.logger.log(f"Получено сообщение пользователя: {message[:120]}")
         lower = message.lower()
         if self._is_self_modification_request(lower):
@@ -74,7 +85,7 @@ class AssistantEngine:
             response = self.learn(topic)
         else:
             response = self._answer_from_memory(message)
-        self.memory.add("dialog", "ИИ", response, {"role": "assistant"})
+        self.memory.add_episodic("ИИ", response, {"role": "assistant"})
         self._self_analyze(message, response)
         return response
 
@@ -114,7 +125,8 @@ class AssistantEngine:
             "llm_learning_coach": mentor_backend if mentor_note else "fallback-summary",
             "based_on_experience": bool(experience),
         }
-        self.memory.add("knowledge", topic, summary, metadata)
+        self.memory.add_semantic(topic, summary, metadata)
+        self.vector_store.add(summary)
         self.memory.add("task", f"Изучение: {topic}", f"Изучены источники: {len(sources)}\nФайл: {note_path}\nКлючевые идеи: {key_points}")
         emit("Знания сохранены в долговременную память", 95)
         emit(f"Создана заметка: {note_path.name}", 100, status="готово")
