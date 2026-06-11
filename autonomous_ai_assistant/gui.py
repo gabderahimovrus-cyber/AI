@@ -27,19 +27,24 @@ class AssistantApp(tk.Tk):
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
     def _configure_style(self) -> None:
-        self.configure(bg="#0f172a")
+        self.configure(bg="#202123")
         style = ttk.Style(self)
         style.theme_use("clam")
-        style.configure("TFrame", background="#0f172a")
-        style.configure("Panel.TFrame", background="#111827")
-        style.configure("TLabel", background="#0f172a", foreground="#e5e7eb")
-        style.configure("Muted.TLabel", background="#111827", foreground="#9ca3af")
-        style.configure("TButton", background="#2563eb", foreground="#ffffff", borderwidth=0, focusthickness=0, padding=8)
-        style.map("TButton", background=[("active", "#1d4ed8")])
-        style.configure("TNotebook", background="#0f172a", borderwidth=0)
-        style.configure("TNotebook.Tab", background="#1f2937", foreground="#d1d5db", padding=(14, 8))
-        style.map("TNotebook.Tab", background=[("selected", "#2563eb")], foreground=[("selected", "#ffffff")])
-        style.configure("TCombobox", fieldbackground="#1f2937", background="#1f2937", foreground="#e5e7eb")
+        style.configure("TFrame", background="#202123")
+        style.configure("Panel.TFrame", background="#171717")
+        style.configure("Card.TFrame", background="#2f3033", relief="flat")
+        style.configure("TLabel", background="#202123", foreground="#ececf1")
+        style.configure("Muted.TLabel", background="#171717", foreground="#a7a7ad")
+        style.configure("Card.TLabel", background="#2f3033", foreground="#ececf1")
+        style.configure("TButton", background="#10a37f", foreground="#ffffff", borderwidth=0, focusthickness=0, padding=(12, 8))
+        style.map("TButton", background=[("active", "#0e8f70")])
+        style.configure("TNotebook", background="#202123", borderwidth=0)
+        style.configure("TNotebook.Tab", background="#2f3033", foreground="#d1d5db", padding=(16, 10), borderwidth=0)
+        style.map("TNotebook.Tab", background=[("selected", "#444654")], foreground=[("selected", "#ffffff")])
+        style.configure("TCombobox", fieldbackground="#40414f", background="#40414f", foreground="#ececf1")
+        style.configure("Treeview", background="#2f3033", fieldbackground="#2f3033", foreground="#ececf1", borderwidth=0, rowheight=30)
+        style.configure("Treeview.Heading", background="#444654", foreground="#ececf1", borderwidth=0)
+        style.map("Treeview", background=[("selected", "#10a37f")], foreground=[("selected", "#ffffff")])
 
     def _build_layout(self) -> None:
         root = ttk.Frame(self)
@@ -47,7 +52,8 @@ class AssistantApp(tk.Tk):
         sidebar = ttk.Frame(root, style="Panel.TFrame", width=230)
         sidebar.pack(side="left", fill="y")
         sidebar.pack_propagate(False)
-        ttk.Label(sidebar, text="AI Assistant", font=("Inter", 20, "bold"), background="#111827", foreground="#f8fafc").pack(anchor="w", padx=18, pady=(22, 6))
+        ttk.Label(sidebar, text="AI Assistant", font=("Inter", 20, "bold"), background="#171717", foreground="#f8fafc").pack(anchor="w", padx=18, pady=(22, 6))
+        ttk.Label(sidebar, text="ChatGPT-like local workspace", style="Muted.TLabel", wraplength=190).pack(anchor="w", padx=18, pady=(0, 14))
         self.status_label = ttk.Label(sidebar, text="● Готов", style="Muted.TLabel")
         self.status_label.pack(anchor="w", padx=18, pady=(0, 18))
         self.memory_indicator = ttk.Label(sidebar, text="Память: 0", style="Muted.TLabel")
@@ -59,7 +65,8 @@ class AssistantApp(tk.Tk):
             ttk.Label(sidebar, text=title, style="Muted.TLabel").pack(anchor="w", padx=18, pady=5)
 
         self.notebook = ttk.Notebook(root)
-        self.notebook.pack(side="left", fill="both", expand=True, padx=10, pady=10)
+        self.notebook.pack(side="left", fill="both", expand=True, padx=12, pady=12)
+        self._build_progress_panel(root)
         self._build_chat_tab()
         self._build_memory_tab()
         self._build_learning_tab()
@@ -69,9 +76,27 @@ class AssistantApp(tk.Tk):
         self._build_settings_tab()
 
     def _text(self, parent: tk.Widget, height: int = 10) -> tk.Text:
-        widget = tk.Text(parent, height=height, bg="#020617", fg="#e5e7eb", insertbackground="#93c5fd", relief="flat", wrap="word", padx=12, pady=12)
-        widget.configure(font=("Inter", 11))
+        widget = tk.Text(parent, height=height, bg="#343541", fg="#ececf1", insertbackground="#10a37f", relief="flat", wrap="word", padx=16, pady=14)
+        widget.configure(font=("Inter", 11), highlightthickness=1, highlightbackground="#565869", highlightcolor="#10a37f")
         return widget
+
+    def _build_progress_panel(self, root: tk.Widget) -> None:
+        panel = ttk.Frame(root, style="Panel.TFrame", width=330)
+        panel.pack(side="right", fill="y")
+        panel.pack_propagate(False)
+        ttk.Label(panel, text="Прогресс обучения", font=("Inter", 15, "bold"), background="#171717", foreground="#f8fafc").pack(anchor="w", padx=16, pady=(22, 6))
+        ttk.Label(panel, text="Здесь видно, как модель учится: этап, процент, статус и связь с прошлым опытом.", style="Muted.TLabel", wraplength=280).pack(anchor="w", padx=16, pady=(0, 12))
+        columns = ("topic", "percent", "status")
+        self.progress_tree = ttk.Treeview(panel, columns=columns, show="headings", height=14)
+        self.progress_tree.heading("topic", text="Тема")
+        self.progress_tree.heading("percent", text="%")
+        self.progress_tree.heading("status", text="Статус")
+        self.progress_tree.column("topic", width=150, anchor="w")
+        self.progress_tree.column("percent", width=50, anchor="center")
+        self.progress_tree.column("status", width=90, anchor="center")
+        self.progress_tree.pack(fill="both", expand=True, padx=14, pady=(0, 12))
+        ttk.Button(panel, text="Обновить прогресс", command=self._refresh_progress).pack(fill="x", padx=14, pady=(0, 8))
+        ttk.Button(panel, text="План самоулучшения", command=self._create_self_mod_plan).pack(fill="x", padx=14, pady=(0, 14))
 
     def _build_chat_tab(self) -> None:
         tab = ttk.Frame(self.notebook)
@@ -135,7 +160,7 @@ class AssistantApp(tk.Tk):
         ttk.Button(left, text="Обновить", command=self._refresh_files).pack(fill="x")
         ttk.Button(left, text="Создать", command=self._create_file).pack(fill="x", pady=6)
         ttk.Button(left, text="Сохранить", command=self._save_current_file).pack(fill="x")
-        self.file_list = tk.Listbox(left, bg="#020617", fg="#e5e7eb", selectbackground="#2563eb", relief="flat", width=34)
+        self.file_list = tk.Listbox(left, bg="#343541", fg="#ececf1", selectbackground="#10a37f", relief="flat", width=34, highlightthickness=1, highlightbackground="#565869")
         self.file_list.pack(fill="both", expand=True, pady=(10, 0))
         self.file_list.bind("<<ListboxSelect>>", lambda _e: self._open_selected_file())
         self.file_editor = self._text(tab, 34)
@@ -145,28 +170,43 @@ class AssistantApp(tk.Tk):
     def _build_settings_tab(self) -> None:
         tab = ttk.Frame(self.notebook)
         self.notebook.add(tab, text="Настройки")
-        frame = ttk.Frame(tab, style="Panel.TFrame")
+        frame = ttk.Frame(tab, style="Card.TFrame")
         frame.pack(anchor="nw", fill="x", padx=12, pady=12)
-        ttk.Label(frame, text="Использование ресурсов", background="#111827").grid(row=0, column=0, sticky="w", padx=12, pady=12)
+        ttk.Label(frame, text="Использование ресурсов", style="Card.TLabel").grid(row=0, column=0, sticky="w", padx=12, pady=12)
         self.resource_level = ttk.Combobox(frame, values=["низкая нагрузка", "средняя нагрузка", "высокая нагрузка", "максимальная нагрузка"], state="readonly")
         self.resource_level.set(self.engine.settings.get("resource_level", "средняя нагрузка"))
         self.resource_level.grid(row=0, column=1, sticky="ew", padx=12, pady=12)
-        ttk.Label(frame, text="Языковая модель", background="#111827").grid(row=1, column=0, sticky="w", padx=12, pady=12)
+        ttk.Label(frame, text="Языковая модель", style="Card.TLabel").grid(row=1, column=0, sticky="w", padx=12, pady=12)
         self.llm_backend = ttk.Combobox(frame, values=["auto", "ollama", "transformers", "off"], state="readonly")
         self.llm_backend.set(self.engine.settings.get("llm_backend", "auto"))
         self.llm_backend.grid(row=1, column=1, sticky="ew", padx=12, pady=12)
-        ttk.Label(frame, text="Модель (например llama3.2)", background="#111827").grid(row=2, column=0, sticky="w", padx=12, pady=12)
+        ttk.Label(frame, text="Модель (например llama3.2)", style="Card.TLabel").grid(row=2, column=0, sticky="w", padx=12, pady=12)
         self.llm_model = ttk.Entry(frame)
         self.llm_model.insert(0, self.engine.settings.get("llm_model", ""))
         self.llm_model.grid(row=2, column=1, sticky="ew", padx=12, pady=12)
         ttk.Label(
             frame,
             text="auto пробует локальную Ollama; transformers можно выбрать явно. Если модели нет, работает встроенный живой режим.",
-            background="#111827",
+            background="#2f3033",
             foreground="#9ca3af",
             wraplength=620,
         ).grid(row=3, column=0, columnspan=2, sticky="w", padx=12, pady=(0, 12))
-        ttk.Button(frame, text="Сохранить настройки", command=self._save_settings).grid(row=4, column=1, sticky="e", padx=12, pady=12)
+        ttk.Label(frame, text="LLM помогает обучению", style="Card.TLabel").grid(row=4, column=0, sticky="w", padx=12, pady=12)
+        self.llm_learning_coach = ttk.Combobox(frame, values=["on", "off"], state="readonly")
+        self.llm_learning_coach.set(self.engine.settings.get("llm_learning_coach", "on"))
+        self.llm_learning_coach.grid(row=4, column=1, sticky="ew", padx=12, pady=12)
+        ttk.Label(frame, text="Самомодификация", style="Card.TLabel").grid(row=5, column=0, sticky="w", padx=12, pady=12)
+        self.self_modification_mode = ttk.Combobox(frame, values=["workspace", "autonomous_workspace", "off"], state="readonly")
+        self.self_modification_mode.set(self.engine.settings.get("self_modification_mode", "workspace"))
+        self.self_modification_mode.grid(row=5, column=1, sticky="ew", padx=12, pady=12)
+        ttk.Label(
+            frame,
+            text="workspace создает планы и код в рабочей папке; autonomous_workspace делает это также после автономного обучения; off выключает функцию.",
+            background="#2f3033",
+            foreground="#9ca3af",
+            wraplength=620,
+        ).grid(row=6, column=0, columnspan=2, sticky="w", padx=12, pady=(0, 12))
+        ttk.Button(frame, text="Сохранить настройки", command=self._save_settings).grid(row=7, column=1, sticky="e", padx=12, pady=12)
         frame.columnconfigure(1, weight=1)
 
     def _send_chat(self) -> None:
@@ -204,6 +244,18 @@ class AssistantApp(tk.Tk):
         import threading
         threading.Thread(target=run, daemon=True).start()
 
+    def _create_self_mod_plan(self) -> None:
+        self._set_task("самоулучшение")
+        def run() -> None:
+            try:
+                result = self.engine.create_self_modification_plan("Запрос из панели прогресса")
+                self.ui_queue.put(("autonomous", result + "\n"))
+            except Exception as exc:
+                self.ui_queue.put(("autonomous", f"Ошибка самоулучшения: {exc}\n"))
+            self.ui_queue.put(("task", "нет"))
+        import threading
+        threading.Thread(target=run, daemon=True).start()
+
     def _start_autonomous(self) -> None:
         if self.engine.start_autonomous(lambda line: self.ui_queue.put(("autonomous", line + "\n"))):
             self._set_task("автономный режим")
@@ -216,7 +268,7 @@ class AssistantApp(tk.Tk):
         self._set_task("остановка автономного режима")
 
     def _refresh_all(self) -> None:
-        self._refresh_memory(); self._refresh_logs(); self._refresh_files(); self._refresh_chat_history()
+        self._refresh_memory(); self._refresh_logs(); self._refresh_files(); self._refresh_chat_history(); self._refresh_progress()
 
     def _refresh_chat_history(self) -> None:
         for item in reversed(self.engine.memory.recent(30, "dialog")):
@@ -230,6 +282,14 @@ class AssistantApp(tk.Tk):
         for item in items:
             self._append(self.memory_text, f"#{item.id} [{item.kind}] {item.title}\n{item.content[:1200]}\n\n")
         self.memory_indicator.configure(text=f"Память: {self.engine.memory.stats().get('total', 0)} записей")
+        self._refresh_progress()
+
+    def _refresh_progress(self) -> None:
+        if not hasattr(self, "progress_tree"):
+            return
+        self.progress_tree.delete(*self.progress_tree.get_children())
+        for item in self.engine.learning_progress(20):
+            self.progress_tree.insert("", "end", values=(item["topic"], f'{item["percent"]}%', item["status"]))
 
     def _refresh_logs(self) -> None:
         self.log_text.delete("1.0", "end")
@@ -277,6 +337,8 @@ class AssistantApp(tk.Tk):
         self.engine.settings["resource_level"] = self.resource_level.get()
         self.engine.settings["llm_backend"] = self.llm_backend.get()
         self.engine.settings["llm_model"] = self.llm_model.get().strip()
+        self.engine.settings["llm_learning_coach"] = self.llm_learning_coach.get()
+        self.engine.settings["self_modification_mode"] = self.self_modification_mode.get()
         self.engine.save_settings()
         self._refresh_memory()
 
@@ -290,9 +352,11 @@ class AssistantApp(tk.Tk):
             elif kind == "learning": self._append(self.learning_log, payload)
             elif kind == "autonomous": self._append(self.autonomous_log, payload)
             elif kind == "task": self._set_task(payload)
+            self._refresh_progress()
         while not self.engine.logger.events.empty():
             self._append(self.log_text, self.engine.logger.events.get() + "\n")
         self.memory_indicator.configure(text=f"Память: {self.engine.memory.stats().get('total', 0)} записей")
+        self._refresh_progress()
         self.after(250, self._poll_events)
 
     def _append(self, widget: tk.Text, text: str) -> None:
