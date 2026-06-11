@@ -74,3 +74,31 @@ def test_llm_settings_are_saved(tmp_path):
     restarted = AssistantEngine(tmp_path)
     assert restarted.settings["llm_backend"] == "ollama"
     assert restarted.settings["llm_model"] == "llama3.2"
+
+
+def test_learning_progress_and_llm_coach_are_recorded(tmp_path):
+    engine = AssistantEngine(tmp_path)
+    engine.learner = FakeLearner()
+    engine.settings["llm_backend"] = "off"
+
+    answer = engine.learn("Python")
+    progress = engine.learning_progress()
+    knowledge = engine.memory.recent(1, "knowledge")[0]
+
+    assert "Подсказки языковой модели-наставника" in answer
+    assert progress
+    assert progress[0]["percent"] == 100
+    assert progress[0]["status"] == "готово"
+    assert knowledge.metadata["llm_learning_coach"] == "fallback"
+
+
+def test_self_modification_creates_workspace_plan(tmp_path):
+    engine = AssistantEngine(tmp_path)
+    engine.settings["llm_backend"] = "off"
+
+    answer = engine.chat("Самомодифицируй себя и предложи улучшение")
+
+    assert "план самомодификации" in answer.lower()
+    names = {str(path.relative_to(engine.files.root)) for path in engine.files.list()}
+    assert any(name.startswith("self_mods/self_improvement_") and name.endswith(".md") for name in names)
+    assert engine.memory.stats()["self_modification"] == 1
