@@ -19,8 +19,14 @@
 Требуется Python 3.10+ с установленным Tkinter. В большинстве установок Python на Windows и macOS Tkinter уже включен; на Linux может потребоваться пакет `python3-tk`.
 
 ```bash
-python -m autonomous_ai_assistant
+python run.py
 ```
+
+Также можно запускать готовыми файлами из корня проекта:
+
+- Windows: `run.bat`;
+- Linux/macOS: `./run.sh`;
+- универсально: `python -m autonomous_ai_assistant`.
 
 Данные приложения по умолчанию хранятся в `~/.autonomous_ai_assistant`:
 
