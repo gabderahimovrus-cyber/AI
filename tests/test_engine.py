@@ -50,3 +50,27 @@ def test_settings_are_saved(tmp_path):
 
     restarted = AssistantEngine(tmp_path)
     assert restarted.settings["resource_level"] == "высокая нагрузка"
+
+
+def test_chat_uses_lively_fallback_and_remembers_name(tmp_path):
+    engine = AssistantEngine(tmp_path)
+    engine.settings["llm_backend"] = "off"
+
+    first = engine.chat("Привет, меня зовут Алекс")
+    second = engine.chat("Как ты?")
+
+    assert "Алекс" in first
+    assert "теплее" in second or "готов" in second
+    user_items = [item for item in engine.memory.recent(10, "dialog") if item.metadata.get("role") == "user"]
+    assert any(item.metadata.get("user_name") == "Алекс" for item in user_items)
+
+
+def test_llm_settings_are_saved(tmp_path):
+    engine = AssistantEngine(tmp_path)
+    engine.settings["llm_backend"] = "ollama"
+    engine.settings["llm_model"] = "llama3.2"
+    engine.save_settings()
+
+    restarted = AssistantEngine(tmp_path)
+    assert restarted.settings["llm_backend"] == "ollama"
+    assert restarted.settings["llm_model"] == "llama3.2"
