@@ -1,0 +1,12 @@
+[project]
+name = "autonomous-ai-assistant"
+version = "1.0.0"
+description = "Desktop autonomous AI assistant with chat, durable memory, web learning, file workspace and autonomous mode."
+requires-python = ">=3.10"
+
+[project.scripts]
+autonomous-ai-assistant = "autonomous_ai_assistant.gui:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
